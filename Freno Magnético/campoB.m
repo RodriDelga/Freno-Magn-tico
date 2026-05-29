@@ -1,94 +1,78 @@
-function [z] = campoB(ds,km,Px,Py,Pz,dx,dy,nl,N,rw)
-    z = -5.2:ds:5.2; % Limites de la malla
-    x = z;
-    y = z;
+function [dBz_eje, z] = campoB(ds,km,Px,Py,Pz,dx,dy,nl,N,rw,plot_option)
+    % 1. Definición de la malla según la opción elegida
+    z = -5.2:ds:5.2; % Límites de la malla en Z (siempre fijos para la trayectoria)
     
-    Lx = length(x); % Puntos en x
-    Ly = length(y); % Puntos en y
-    Lz = length(z); % Puntos en z
-    % Inicializar los valores en 0 de los diferenciales de las componentes
-    % del campo
+    if plot_option
+        x = z;
+        y = z;
+    else
+        % Malla mínima en X e Y para ahorrar memoria y tiempo de CPU
+        x = -0.1:ds:0.1;
+        y = -0.1:ds:0.1;
+    end
+    
+    Lx = length(x); 
+    Ly = length(y); 
+    Lz = length(z); 
+    
+    % Inicializar matrices en 0
     dBx = zeros(Lx,Ly,Lz,'single'); 
     dBy = zeros(Lx,Ly,Lz,'single');
-    dBz = zeros(Lx,Ly,Lz,'single');
+    dBz_malla = zeros(Lx,Ly,Lz,'single');
     
-
+    % --- CORRECCIÓN ABSOLUTA DE LOS BUCLES ---
     for i = 1:Lx
-       for j = 1:Lx
-          for k = 1:Lx
+       for j = 1:Ly  % Corregido a Ly
+          for k = 1:Lz  % Corregido a Lz
              for l = 1:N*nl
-                % Componente de r, medidos entre la distancia que hay entre
-                % cada punto y el lugar donde se mide
                 rx = x(i) - Px(l);
                 ry = y(j) - Py(l);
                 rz = z(k) - Pz(l);
-                % Magnitud de r
+                
                 r = sqrt(rx^2 + ry^2 + rz^2 + rw^2);
                 r3 = r^3;
-
-                % Ir haciendo la suma de cada componente delñ vector 
-                % resultante por medio del producto cruz de dl x r, y 
-                % con esas componente, solo multiplicar por la consntante
+                
                 dBx(i,j,k) = dBx(i,j,k) + km * dy(l) * rz / r3;
                 dBy(i,j,k) = dBy(i,j,k) + km * dx(l) * rz / r3;
-                dBz(i,j,k) = dBz(i,j,k) + km * (dx(l) * ry - dy(l) * rx) / r3;
+                dBz_malla(i,j,k) = dBz_malla(i,j,k) + km * (dx(l) * ry - dy(l) * rx) / r3;
              end
           end
        end 
     end
 
-% Corte en y = 0 → plano xz
+    % 2. Módulo de graficación del plano XZ (Solo si plot_option es verdadero)
+    if plot_option
+        coords = -5.2:ds:5.2;
+        iy = round(length(coords) / 2);
+        [X2, Z2] = meshgrid(coords, coords);
+        
+        Bx_slice = squeeze(dBx(:, iy, :))';
+        Bz_slice = squeeze(dBz_malla(:, iy, :))';
+        Bmag = sqrt(Bx_slice.^2 + Bz_slice.^2);
+        
+        figure('Color', 'w', 'Name', 'Plano XZ')
+        contourf(X2, Z2, Bmag, 40, 'LineColor', 'none')
+        colormap turbo; cb = colorbar; cb.Label.String = '|B|';
+        hold on
+        streamslice(X2, Z2, Bx_slice, Bz_slice, 2)
+        xlabel('x (m)'); ylabel('z (m)');
+        title('Campo B — plano xz (y = 0)');
+        axis equal tight
+    end
 
-% Vector de coordenadas del grid (el mismo que usa campoB internamente)
-coords = -5.2:ds:5.2;
+    % 3. Extracción del perfil central (Eje de simetría X=0, Y=0)
+    idx_x = ceil(Lx / 2);
+    idx_y = ceil(Ly / 2);
+    dBz_eje = squeeze(dBz_malla(idx_x, idx_y, :)); % Vector 1D que va al Main
 
-% Encuentra el índice central del vector, que corresponde a y ≈ 0
-% round() por si length es par y no cae exacto en el centro
-iy = round(length(coords) / 2);
-
-% Crea una malla 2D en el plano xz
-% X2 varía en columnas (dirección x), Z2 varía en filas (dirección z)
-% Ambas matrices son de tamaño length(coords) x length(coords)
-[X2, Z2] = meshgrid(coords, coords);
-
-% Extrae el plano xz del array 3D dBx fijando el índice de y en iy
-% squeeze() elimina la dimensión colapsada (que queda de tamaño 1)
-% El resultado sin transponer sería (Lx × Lz), pero meshgrid espera (Lz × Lx)
-% por eso se transpone con '
-Bx_slice = squeeze(dBx(:, iy, :))';
-Bz_slice = squeeze(dBz(:, iy, :))';
-
-% Calcula la magnitud del campo en cada punto del plano
-Bmag = sqrt(Bx_slice.^2 + Bz_slice.^2);
-
-% Figura
-
-% Crea una figura con fondo blanco
-figure('Color', 'w')
-
-% Dibuja un mapa de color relleno con 40 niveles de contorno
-% 'LineColor','none' quita las líneas entre contornos para que se vea suave
-contourf(X2, Z2, Bmag, 40, 'LineColor', 'none')
-
-% Paleta de colores: negro→azul→verde→amarillo→rojo (buena para campos)
-colormap turbo
-
-% Agrega la barra de color y le pone etiqueta
-cb = colorbar;
-cb.Label.String = '|B|';
-
-% Permite agregar más elementos encima sin borrar el contourf
-hold on
-
-% Dibuja las líneas de campo a partir de los vectores (Bx, Bz)
-% El último argumento (2) controla la densidad de líneas: mayor = más líneas
-streamslice(X2, Z2, Bx_slice, Bz_slice, 2)
-
-% Etiquetas de ejes y título
-xlabel('x')
-ylabel('z')
-title('Campo B — plano xz (y = 0)')
-
-% axis equal → misma escala en x y z para no distorsionar el campo
-% tight → recorta los márgenes vacíos alrededor de la gráfica
-axis equal tight
+    % 4. Gráfica del Gradiente del Campo (dBz/dz) contra Z
+    % Usamos gradient para no perder dimensiones ni desfasar el vector z
+    dz_espacio = z(2) - z(1);
+    dBz_dz_profile = gradient(dBz_eje, dz_espacio);
+    
+    figure('Color', 'w', 'Name', 'Gradiente Bz')
+    plot(z, dBz_dz_profile, 'r-', 'LineWidth', 2);
+    xlabel('z (m)'); ylabel('dB_z / dz (T/m)');
+    title('Gradiente del campo magnético B_z');
+    grid on;
+end
