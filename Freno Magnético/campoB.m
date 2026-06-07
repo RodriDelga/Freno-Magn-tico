@@ -1,4 +1,4 @@
-function [dBz_eje, z] = campoB(ds,km,Px,Py,Pz,dx,dy,nl,N,rw,plot_option)
+function [dBz_eje, z,dPhi_dz] = campoB(ds,km,Px,Py,Pz,dx,dy,nl,N,rw,plot_option,R)
     % 1. Definición de la malla según la opción elegida
     z = -5.2:ds:5.2; % Límites de la malla en Z (siempre fijos para la trayectoria)
     
@@ -7,8 +7,8 @@ function [dBz_eje, z] = campoB(ds,km,Px,Py,Pz,dx,dy,nl,N,rw,plot_option)
         y = z;
     else
         % Malla mínima en X e Y para ahorrar memoria y tiempo de CPU
-        x = -0.1:ds:0.1;
-        y = -0.1:ds:0.1;
+        x = -R:0.1:R;
+        y = -R:0.1:R;
     end
     
     Lx = length(x); 
@@ -40,6 +40,7 @@ function [dBz_eje, z] = campoB(ds,km,Px,Py,Pz,dx,dy,nl,N,rw,plot_option)
        end 
     end
 
+
     % 2. Módulo de graficación del plano XZ (Solo si plot_option es verdadero)
     if plot_option
         coords = -5.2:ds:5.2;
@@ -64,6 +65,13 @@ function [dBz_eje, z] = campoB(ds,km,Px,Py,Pz,dx,dy,nl,N,rw,plot_option)
     idx_x = ceil(Lx / 2);
     idx_y = ceil(Ly / 2);
     dBz_eje = squeeze(dBz_malla(idx_x, idx_y, :)); % Vector 1D que va al Main
+    
+    for k = 1:length(z)
+        Bz_slice = squeeze(dBz_malla(:,:,k));
+        phiB(k) = flujoB(Bz_slice,x,y,R);
+    end
+
+    dPhi_dz = diff(phiB) ./ diff(z);
 
     % 4. Gráfica del Gradiente del Campo (dBz/dz) contra Z
     % Usamos gradient para no perder dimensiones ni desfasar el vector z

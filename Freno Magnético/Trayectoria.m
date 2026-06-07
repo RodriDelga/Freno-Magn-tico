@@ -1,4 +1,4 @@
-function zm = Trayectoria(Bz,z,mag,m,zo,dt,vz_init,gamma,magnet)
+function zm = Trayectoria(Bz,z,mag,m,zo,dt,vz_init,gamma,magnet,dPhi_dz,R_circuito)
     % =========================================================================
     % SIMULACIÓN DE LA TRAYECTORIA DEL IMÁN (CON Y SIN FRENO MAGNÉTICO)
     % =========================================================================
@@ -31,7 +31,7 @@ function zm = Trayectoria(Bz,z,mag,m,zo,dt,vz_init,gamma,magnet)
         else
             % Si magnet es falso (0), calcula usando el modelo de corrientes de Foucault (Eddy)
             [zm(cc+1), vz(cc+1)] = rk4_step(zm(cc), vz(cc), dt, ...
-                @(z_pos, v_val) a_total_eddy(z_pos, v_val, Bz, z_axis, mag, gamma, m));
+                @(z_pos, v_val) a_total_eddy(z_pos,v_val,Bz,z_axis,gamma,m,dPhi_dz,R_circuito));
         end
         
         % C) ACTUALIZACIÓN DE TIEMPO Y CONTADORES
@@ -46,26 +46,32 @@ function zm = Trayectoria(Bz,z,mag,m,zo,dt,vz_init,gamma,magnet)
         end
     end
     
-    % --- 3. RECORTE DE DATOS EXCLUSIVO PARA LA CAÍDA LIBRE ---
-    % Buscamos los índices numéricos donde el vector de tiempo 'tt' es menor o igual a 1.5s
+    vz_out = vz;
+
+    % --- RECORTE CAÍDA LIBRE ---
     idx_recorte = find(tt <= 1.5);
-    
-    % --- 4. GENERACIÓN DE GRÁFICAS ---
-    figure('Color', 'w'); % Creamos una ventana de gráfico con fondo blanco
-    
-    % Grafica la caída libre RECORTADA (solo los datos correspondientes a los primeros 1.5 segundos)
-    plot(tt(idx_recorte), zmfree(idx_recorte), 'r--', 'LineWidth', 2); 
-    hold on; % Mantiene la gráfica activa para poder encimar la siguiente línea
-    
-    % Grafica la trayectoria del imán COMPLETA (hasta que el bucle se detuvo en Z = -3)
-    plot(tt, zm, 'g-', 'LineWidth', 2);     
-    
-    % --- 5. ESTÉTICA Y DETALLES DE LA GRÁFICA ---
-    grid on; % Activa la cuadrícula de fondo
-    xlabel('Tiempo (s)'); % Etiqueta del eje horizontal
-    ylabel('Posición en Z (m)'); % Etiqueta del eje vertical
-    title(['Trayectoria del Imán (Magnet = ', num2str(magnet), ')']); % Título dinámico
-    legend('Caída libre (0 a 1.5s)', 'Trayectoria magnética completa', 'Location', 'best'); % Leyenda explicativa
+
+    % --- GRÁFICA POSICIÓN ---
+    figure('Color', 'w');
+    plot(tt(idx_recorte), zmfree(idx_recorte), 'r--', 'LineWidth', 2);
+    hold on;
+    plot(tt, zm, 'g-', 'LineWidth', 2);
+    grid on;
+    xlabel('Tiempo (s)');
+    ylabel('Posición en Z (m)');
+    title(['Trayectoria del Imán (Magnet = ', num2str(magnet), ')']);
+    legend('Caída libre (0 a 1.5s)', 'Trayectoria magnética completa', 'Location', 'best');
+
+    % --- GRÁFICA VELOCIDAD ---
+    figure('Color', 'w');
+    plot(tt, vz, 'g-', 'LineWidth', 2);
+    grid on;
+    hold on;
+    plot(tt(idx_recorte), vzfree(idx_recorte), 'b--', 'LineWidth', 2);
+    xlabel('Tiempo (s)');
+    ylabel('Velocidad en Z (m/s)');
+    title(['Velocidad del Imán (Magnet = ', num2str(magnet), ')']);
+    legend('Velocidad magnética', 'Location', 'best');
 end
 
 function [z_next, v_next] = rk4_step(z,v,dt,a_func)
@@ -113,24 +119,46 @@ function a = a_total(z,v,Bz,z_axis,mag,gamma,m)
     a = F / m;                % Segunda Ley de Newton: Aceleración = Fuerza total / Masa
 end
 
-function a = a_total_eddy(z,v,Bz,z_axis,sigma_eff,gamma,m)
-    % =========================================================================
-    % MODELO DINÁMICO 2: CORRIENTES INDUCIDAS / DE FOUCAULT (Eddy Currents)
-    % =========================================================================
-    delta = 0.005; % Distancia diferencial para calcular el gradiente espacial
+function a = a_total_eddy(z,v,Bz,z_axis,gamma,m,dPhi_dz,R_circuito)
+    % dPhi_dz = dPhi_dz(1:1:208);
+    % dPhi_dz_local = interp1(z_axis, dPhi_dz,z,'linear',0);
+    % fem = -dPhi_dz_local * v;
+    % I_ind = fem / R;
+    % F_eddy = I_ind * dPhi_dz_local;
+    % Ff = -gamma * v;
+    % Fg = -m * 9.81;
+    % 
+    % a = (F_eddy + Ff + Fg) / m;
+
+    % % Eje de z para dPhi_dz: puntos medios entre los nodos originales
+    % z_mid = 0.5 * (z_axis(1:end-1) + z_axis(2:end));
+    % 
+    % % Interpolación del gradiente de flujo en la posición actual del imán
+    % dPhi_dz_local = interp1(z_mid, dPhi_dz, z, 'linear', 0);
+    % 
+    % % FEM inducida y corriente
+    % fem = -dPhi_dz_local * v;
+    % I_ind = fem / R;          % <-- R debe ser visible aquí (ver nota abajo)
+    % 
+    % % Fuerza de Eddy, fricción y gravedad
+    % F_eddy = I_ind .* dPhi_dz_local;
+    % Ff = -gamma * v;
+    % Fg = -m * 9.81;
+    % 
+    % a_ff = (F_eddy + Ff + Fg) / m;
+    % a = a_ff(1);
+
+    z_mid = 0.5 * (z_axis(1:end-1) + z_axis(2:end));
     
-    % Interpolación: Misma búsqueda de campo magnético adelante y atrás de la posición
-    Bz_foward = interp1(z_axis, Bz, z + delta, "linear", "extrap");
-    Bz_backward = interp1(z_axis, Bz, z - delta, "linear", "extrap");
+    % Forzamos que z sea escalar y el resultado también lo sea
+    dPhi_dz_local = interp1(z_mid(:), dPhi_dz(:), z, 'linear', 0);
+    dPhi_dz_local = dPhi_dz_local(1);  % garantiza escalar estricto
     
-    % Cálculo exacto del gradiente del campo magnético (dBz / dz)
-    dBz_dz = (Bz_foward - Bz_backward) / (2 * delta);
+    fem     = -dPhi_dz_local * v;
+    I_ind   = fem / R_circuito;
+    F_eddy  = I_ind .* dPhi_dz_local;  % .* por si acaso
+    Ff      = -gamma * v;
+    Fg      = -m * 9.81;
     
-    % CÁLCULO DE LAS FUERZAS FÍSICAS (Ley de Faraday-Lenz)
-    % El freno por corrientes inducidas depende del CUADRADO del gradiente del campo y de la velocidad
-    F_eddy = -sigma_eff * (dBz_dz^2) * v; 
-    Ff = -gamma * v;                    % Fuerza de fricción del aire
-    F = F_eddy + Ff - m * 9.81;         % Sumatoria de fuerzas totales: Freno Eddy + Fricción - Peso
-    
-    a = F / m;                          % Segunda Ley de Newton: Aceleración = Fuerza total / Masa
+    a = (F_eddy + Ff + Fg) / m;
 end
