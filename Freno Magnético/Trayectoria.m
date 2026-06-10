@@ -8,7 +8,7 @@ function zm = Trayectoria(Bz,z,mag,m,zo,dt,vz_init,gamma,magnet,dPhi_dz,R_circui
     zm(1) = zo;         % Vector de posición Z para el imán real (Inicia en zo)
     zmfree(1) = zo;     % Vector de posición Z para la caída libre teórica
     vz(1) = vz_init;    % Vector de velocidad Z para el imán real
-    vzfree(1) = 0;      % Velocidad inicial de la caída libre (Parte desde el reposo)
+    vzfree(1) = vz_init;      % Velocidad inicial de la caída libre (Parte desde el reposo)
     tt(1) = 0;          % Vector de tiempo (Arranca en 0 segundos)
     cc = 1;             % Contador/Índice que controla los pasos dentro del bucle
     z_axis = z;         % Guardamos el vector de posiciones de la malla del campo magnético
@@ -120,33 +120,6 @@ function a = a_total(z,v,Bz,z_axis,mag,gamma,m)
 end
 
 function a = a_total_eddy(z,v,Bz,z_axis,gamma,m,dPhi_dz,R_circuito)
-    % dPhi_dz = dPhi_dz(1:1:208);
-    % dPhi_dz_local = interp1(z_axis, dPhi_dz,z,'linear',0);
-    % fem = -dPhi_dz_local * v;
-    % I_ind = fem / R;
-    % F_eddy = I_ind * dPhi_dz_local;
-    % Ff = -gamma * v;
-    % Fg = -m * 9.81;
-    % 
-    % a = (F_eddy + Ff + Fg) / m;
-
-    % % Eje de z para dPhi_dz: puntos medios entre los nodos originales
-    % z_mid = 0.5 * (z_axis(1:end-1) + z_axis(2:end));
-    % 
-    % % Interpolación del gradiente de flujo en la posición actual del imán
-    % dPhi_dz_local = interp1(z_mid, dPhi_dz, z, 'linear', 0);
-    % 
-    % % FEM inducida y corriente
-    % fem = -dPhi_dz_local * v;
-    % I_ind = fem / R;          % <-- R debe ser visible aquí (ver nota abajo)
-    % 
-    % % Fuerza de Eddy, fricción y gravedad
-    % F_eddy = I_ind .* dPhi_dz_local;
-    % Ff = -gamma * v;
-    % Fg = -m * 9.81;
-    % 
-    % a_ff = (F_eddy + Ff + Fg) / m;
-    % a = a_ff(1);
 
     z_mid = 0.5 * (z_axis(1:end-1) + z_axis(2:end));
     
@@ -162,3 +135,4 @@ function a = a_total_eddy(z,v,Bz,z_axis,gamma,m,dPhi_dz,R_circuito)
     
     a = (F_eddy + Ff + Fg) / m;
 end
+
