@@ -85,13 +85,13 @@ function [z_next, v_next] = rk4_step(z,v,dt,a_func)
     k1v = a_func(z,v);                 % Pendiente de velocidad 1: Aceleración actual
     
     k2z = v + 0.5 * dt * k1v;          % Pendiente de posición 2: Velocidad estimada a mitad del paso
-    k2v = a_func(z + 0.5 * dt * k1v, v + 0.5 * dt * k1v); % Pendiente de velocidad 2: Aceleración a mitad del paso
+    k2v = a_func(z + 0.5 * dt * k1z, v + 0.5 * dt * k1v); % Pendiente de velocidad 2: Aceleración a mitad del paso
     
     k3z = v + 0.5 * dt * k2v;          % Pendiente de posición 3: Segunda estimación de velocidad a mitad del paso
-    k3v = a_func(z + 0.5 * dt * k2v, v + 0.5 * dt * k2v); % Pendiente de velocidad 3: Segunda aceleración a mitad del paso
+    k3v = a_func(z + 0.5 * dt * k2z, v + 0.5 * dt * k2v); % Pendiente de velocidad 3: Segunda aceleración a mitad del paso
     
     k4z = v + dt * k3v;                % Pendiente de posición 4: Velocidad estimada al final del paso dt
-    k4v = a_func(z + dt * k3v, v + dt * k3v); % Pendiente de velocidad 4: Aceleración estimada al final del paso dt
+    k4v = a_func(z + dt * k3z, v + dt * k3v); % Pendiente de velocidad 4: Aceleración estimada al final del paso dt
     
     % FÓRMULA DE ACTUALIZACIÓN DE RK4: Combinación ponderada de las 4 pendientes
     z_next = z + dt/6 * (k1z + 2*k2z + 2*k3z + k4z); % Siguiente posición calculada
